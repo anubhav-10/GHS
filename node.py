@@ -31,6 +31,12 @@ class Message:
 		# check this in case of error because of pass reference
 		self.args = args
 
+	def printMessage(self):
+		print ('Message Id -> ' + str(self.id))
+		print ('Sender -> ' + str(self.s_id))
+		print ('Args -> ' + str(self.args))
+
+
 class Node:
 	def __init__(self, _id):
 		'''
@@ -40,11 +46,15 @@ class Node:
 		'''
 		self.id = _id
 		self.state = 0 # SN
-		self.name = 0 # FN
-		self.level = 0 # LN
+		self.name = math.inf # FN
+		self.level = -1 # LN
 		self.parent = -1
 		self.edges = []
 		self.neighbours = []
+		self.bestEdge = -1
+		self.bestWt = math.inf
+		self.testEdge = -1
+		self.findCount = -1
 		self.queue = collections.deque()
 
 	def addEdge(self, edge):
@@ -56,11 +66,39 @@ class Node:
 	def addMessage(self, msg):
 		self.queue.append(msg)
 
+	def printNode(self):
+		print ('Id -> ' + str(self.id))
+		print ('State -> ' + str(self.state))
+		print ('name -> ' + str(self.name))
+		print ('level -> ' + str(self.level))
+		print ('parent -> ' + str(self.parent))
+		print ('bestEdge -> ' + str(self.bestEdge))
+		print ('bestWt -> ' + str(self.bestWt))
+		print ('testEdge -> ' + str(self.testEdge))
+		print ('findCount -> ' + str(self.findCount))
+		print ('Edges:')
+		l = [(edge.w, edge.state) for edge in self.edges]
+		print (l)
+		l = [i.name for i in self.neighbours]
+		print ('neighbours:')
+		print (l)	
+
 	def readMessage(self):
 		if len(self.queue) != 0:
 			msg = self.queue.popleft()
-			print ('queue len: ' + str(msg.id) + ' ' + str(self.id))
+			# print ('Message: self id: ' + str(self.id) + ' ;msg id ' + str(msg.id) + ' ;s_id ' + str(msg.s_id) + ' ; ' + str(msg.args))
+
 			s_id = self.getNodeIndex(msg.s_id)
+
+			if self.state == 0:
+				self.wakeup()
+
+			self.printNode()
+			print()
+			msg.printMessage()
+			print ('j -> ' + str(s_id))
+			print() 
+
 			if msg.id == 1:
 				self.connect(msg, msg.args[0], s_id)
 			elif msg.id == 2:
@@ -75,6 +113,9 @@ class Node:
 				self.Report(msg, msg.args[0], s_id)
 			else:
 				self.ChangeCore(s_id)
+
+			self.printNode()
+			print()
 
 	def getMinEgde(self):
 		ind = -1
@@ -91,6 +132,7 @@ class Node:
 				return i
 
 	def wakeup(self):
+		print ('wakeup called')
 		minEdge = self.getMinEgde()
 		self.edges[minEdge].state = 1
 		self.level = 0
@@ -101,17 +143,18 @@ class Node:
 		self.neighbours[minEdge].addMessage(msg)
 
 	def connect(self, msg, L, j):
-		if self.state == 0:
-			self.wakeup()
+		# if self.state == 0:
+		# 	self.wakeup()
 
 		if L < self.level:
 			self.edges[j].state = 1
 			msg = Message(2, self.id, [self.level, self.name, self.state])
 			self.neighbours[j].addMessage(msg)
-			if self.state == 1:
-				self.findCount += 1
+			# if self.state == 1:
+			# 	self.findCount += 1
 
 		elif self.edges[j].state == 0:
+			msg = Message(1, self.neighbours[j].id, [L])
 			self.addMessage(msg)
 		
 		else:
@@ -119,6 +162,8 @@ class Node:
 			self.neighbours[j].addMessage(msg)
 
 	def initiate(self, L, F, S, j):
+		if S == 1:
+			print ('initiate called')
 		self.level = L
 		self.name = F
 		self.state = S
@@ -130,10 +175,11 @@ class Node:
 			if i != j and edge.state == 1:
 				msg = Message(2, self.id, [L, F, S])
 				self.neighbours[i].addMessage(msg)
-				if S == 1:
-					self.findCount += 1
+				# if S == 1:
+				# 	self.findCount += 1
 
 		if S == 1:
+			self.findCount = 0
 			self.test()
 
 	def test(self):
@@ -145,19 +191,20 @@ class Node:
 				self.testEdge = i
 				minW = edge.w
 
-		if self.testEdge != -1:
+		if self.testEdge >= 0:
 			msg = Message(3, self.id, [self.level, self.name])
 			self.neighbours[self.testEdge].addMessage(msg)
 
 		else:
 			self.testEdge = -1
-			report()
+			self.report()
 
 	def Test(self, msg, L, F, j):
-		if self.state == 0:
-			self.wakeup()
+		# if self.state == 0:
+		# 	self.wakeup()
 
 		if L > self.level:
+			msg = Message(3, self.neighbours[j].id, [L, F])
 			self.addMessage(msg)
 
 		elif F != self.name:
@@ -188,33 +235,47 @@ class Node:
 		self.test()
 
 	def report(self):
-		if self.findCount == 0 and self.testEdge == -1:
+		k = 0
+		for i, edge in enumerate(self.edges):
+			if edge.state == 1 and i != self.parent:
+				k += 1
+		print ('report called')
+		print ('k -> ' + str(k))
+		print ('testEdge -> ' + str(self.testEdge))
+		print (self.findCount == k)
+		print (self.testEdge == -1)
+		# if self.findCount == 0 and self.testEdge == -1:
+		if self.findCount == k and self.testEdge == -1:
 			self.state = 2
 			msg = Message(6, self.id, [self.bestWt])
 			self.neighbours[self.parent].addMessage(msg)
 
 	def Report(self, msg, w, j):
-		print (self.id, self.parent, self.state, w, self.neighbours[j].id, self.bestWt)
+		# print (self.id, self.parent, self.state, w, j, self.neighbours[j].id, self.bestWt)
 		if j != self.parent:
-			self.findCount -= 1
+			self.findCount += 1
 			if w < self.bestWt:
 				self.bestWt = w
 				self.bestEdge = j
 			self.report()
-		elif self.state == 1:
-			self.addMessage(msg)
-		elif w > self.bestWt:
-			self.changeCore()
-		elif w == self.bestWt == math.inf:
-			run = 0
-			print ('halted')
+		else:
+			if self.state == 1:
+				msg = Message(6, self.neighbours[j].id, [w])
+				self.addMessage(msg)
+			elif w > self.bestWt:
+				self.changeCore()
+			elif w == self.bestWt == math.inf:
+				run = 0
+				print ('halted')
 
 	def changeCore(self):
-		if self.edges[self.bestEdge] == 1:
+		# print ('changeCore')
+		if self.edges[self.bestEdge].state == 1:
 			msg = Message(7, self.id, [])
 			self.neighbours[self.bestEdge].addMessage(msg)
 		else:
 			msg = Message(1, self.id, [self.level])
+			self.neighbours[self.bestEdge].addMessage(msg)
 			self.neighbours[self.bestEdge].state = 1
 
 	def ChangeCore(self, j):
