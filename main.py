@@ -39,21 +39,19 @@ def printGraph(nodes):
 		printNode(node)
 		print ()
 
-def execSequential(nodes, edges1, edges2):
+def execSequential(nodes):
 	i = 0
-	while  run == 1:
-		print ('iter: ' + str(i))
-		print ()
-		for node in nodes:
-			# l = [(edge.w, edge.state) for edge in edges1]
-			# print (l)
-			# l = [(edge.w, edge.state) for edge in edges2]
-			# print (l)
-			# node.printNode()
-			# print ()
-			# print ()
+	while len(run) == 1:
+		if debug:
+			print ('iter: ' + str(i))
+			print ()
+		for j, node in enumerate(nodes):
+			print ('Node: ' + str(j))
+			print ()
 			node.readMessage()
-		print ('------------------------------------------------------')
+
+		if debug:
+			print ('------------------------------------------------------')
 		i += 1
 		
 	print ('Done')
@@ -63,7 +61,7 @@ nodes, edges1, edges2 = readInput()
 # for node in nodes:
 # 	node.wakeup()
 nodes[0].wakeup()
-execSequential(nodes, edges1, edges2)
+execSequential(nodes)
 # printGraph(nodes)
 # n = int(input())
 # s = input()
