@@ -1,33 +1,37 @@
 import collections
 import math
 import sys
+import threading
+import os
 
 run = 1
 debug = 0
-
+lock = threading.Lock()
 ans = set()
 
 class Edge:
-	def __init__(self, weight, node):
+	def __init__(self, u, v, weight, node):
 		'''
 			0 -> BASIC
 			1 -> BRANCH
 			2 -> REJECT
 		'''
 		self.state = 0
+		self.u = u
+		self.v = v
 		self.node = node
 		self.weight = weight
 
 class Message:
 	def __init__(self, _id, weight, args):
 		'''
-			1 -> connect
-			2 -> initiate
-			3 -> receipt of test
-			4 -> receipt of accept
-			5 -> receipt of reject
-			6 -> receipt of report
-			7 -> receipt of change core
+			0 -> connect
+			1 -> initiate
+			2 -> receipt of test
+			3 -> receipt of accept
+			4 -> receipt of reject
+			5 -> receipt of report
+			6 -> receipt of change core
 		'''
 		self.id = _id
 		self.weight = weight # sender id
@@ -40,6 +44,11 @@ class Message:
 
 class Node:
 	def __init__(self):
+		'''
+			0 -> Sleeping
+			1 -> Find
+			2 -> Found
+		'''
 		self.state = 0
 		self.name = math.inf
 		self.level = -1
@@ -50,9 +59,9 @@ class Node:
 		self.testEdge = -1
 		self.rec = -1
 		self.queue = collections.deque()
+		self.lock = threading.Lock()
 
 	def printNode(self):
-		# print ('Id -> ' + str(self.id))
 		print ('State -> ' + str(self.state))
 		print ('name -> ' + str(self.name))
 		print ('level -> ' + str(self.level))
@@ -68,8 +77,8 @@ class Node:
 		print ('neighbours:')
 		print (l)	
 
-	def addEdge(self, weight, node):
-		edge = Edge(weight, node)
+	def addEdge(self, u, v, weight, node):
+		edge = Edge(u, v, weight, node)
 		self.edges.append(edge)
 
 	def addMessage(self, msg):
@@ -77,11 +86,21 @@ class Node:
 			print ('Message sent')
 			msg.printMessage()
 			print()
+		self.lock.acquire()
 		self.queue.append(msg)
+		self.lock.release()
+
+	def getEdge(self, weight):
+		for edge in self.edges:
+			if edge.weight == weight:
+				return (edge.u, edge.v, edge.weight)
 
 	def readMessage(self):
 		if len(self.queue) != 0:
+			self.lock.acquire()
 			msg = self.queue.popleft()
+			self.lock.release()
+
 			ind = 0
 			for i, edge in enumerate(self.edges):
 				if self.edges[i].weight == msg.weight:
@@ -128,13 +147,17 @@ class Node:
 		return minEdge
 
 	def wakeup(self):
-		print('wakeup called')
+		if debug:
+			print('wakeup called')
+
 		minEdge = self.getMinEdge()
 		self.edges[minEdge].state = 1
 		self.level = 0
 		self.state = 2
 		self.rec = 0
-		ans.add(self.edges[minEdge].weight)
+		# ans.add(self.edges[minEdge].weight)
+		wt = self.edges[minEdge].weight
+		ans.add(self.getEdge(wt))
 		msg = Message(0, self.edges[minEdge].weight, [0])
 		self.edges[minEdge].node.addMessage(msg)
 
@@ -241,7 +264,7 @@ class Node:
 				self.changeRoot()
 			elif w == self.bestWt == math.inf:
 				run = 0
-				print ('halt')
+				# print ('halt')
 
 	def changeRoot(self):
 		if self.edges[self.bestEdge].state == 1:
@@ -250,33 +273,30 @@ class Node:
 
 		else:
 			self.edges[self.bestEdge].state = 1
-			ans.add(self.edges[self.bestEdge].weight)
+			# ans.add(self.edges[self.bestEdge].weight)
+			wt = self.edges[self.bestEdge].weight
+			ans.add(self.getEdge(wt))
 			msg = Message(0, self.edges[self.bestEdge].weight, [self.level])
 			self.edges[self.bestEdge].node.addMessage(msg)
 
 	def receiveChangeRoot(self, j):
 		self.changeRoot()
 
-def readInput():
-	n = int(input())
+def readInput(inpfile):
+	f = open(inpfile)
+
+	n = int(f.readline())
 	nodes = [Node() for i in range(n)]
-	# edges1, edges2 = [], []
 	try:
-		s = input()
+		s = f.readline()
 		while len(s) != 0:
 			u, v, w = [int(i.strip()) for i in s.strip()[1:-1].split(',')]
-			# edge1 = Edge(u, v, w)
-			# edge2 = Edge(u, v, w)
-			nodes[u].addEdge(w, nodes[v])
-			nodes[v].addEdge(w, nodes[u])
-			# nodes[u].addNeighbour(nodes[v])
-			# nodes[v].addNeighbour(nodes[u])
-			# edges1.append(edge1)
-			# edges2.append(edge2)
-			s = input()
+			nodes[u].addEdge(u, v, w, nodes[v])
+			nodes[v].addEdge(u, v, w, nodes[u])
+			s = f.readline()
 	except:
 		pass
-
+	f.close()
 	return nodes
 
 def printNode(node):
@@ -299,7 +319,6 @@ def printGraph(nodes):
 def execSequential(nodes):
 	global run
 	i = 0
-	# debug = 1
 	while run == 1:
 		if debug:
 			print ('iter: ' + str(i))
@@ -315,13 +334,72 @@ def execSequential(nodes):
 			print ('------------------------------------------------------')
 		i += 1
 		
-	print ('Done')
+	# print ('Done')
 
-nodes = readInput()
+def execNode(i, node):
+	global run, lock
+	# print(threading.currentThread().getName())
+	while run == 1:
+		lock.acquire()
+		lock.release()
+		node.readMessage()
 
-# printGraph(nodes)
+def execParallel(nodes):
+	n = len(nodes)
+	threads = [threading.Thread(target=execNode, args=(i, nodes[i],)) for i in range(n)]
 
-nodes[0].wakeup()
-execSequential(nodes)
+	for i in range(n):
+		threads[i].start()
 
-print (ans)
+	for i in range(n):
+		threads[i].join()
+
+def compare(edge):
+	return edge[2]
+
+def printMST(nodes):
+	global ans
+	n = len(nodes)
+	# mst = set()
+	# for node in nodes:
+	# 	for edge in node.edges:
+	# 		if edge.state == 1:
+	# 			mst.add((edge.u, edge.v, edge.weight))
+	# print (ans)
+	mst = sorted(ans, key = compare)
+	for edge in mst:
+		print (edge)
+
+def printMSTFile(nodes, outfile):
+	n = len(nodes)
+	# mst = set()
+	# for node in nodes:
+	# 	for edge in node.edges:
+	# 		if edge.state == 1:
+	# 			mst.add((edge.u, edge.v, edge.weight))
+
+	mst = sorted(ans, key = compare)
+	f = open(outfile, 'w')
+	for edge in mst:
+		f.write (str(edge) + '\n')
+		# print (edge)
+	f.close()
+
+# Automatic Testing function
+def manage(inpfile):
+	global ans, run
+	nodes = readInput(inpfile)
+	nodes[0].wakeup()
+	execParallel(nodes)
+	# printMSTFile(nodes, outfile)
+	run = 1
+	ans = set()
+
+if __name__ == '__main__':	
+	nodes = readInput(sys.argv[1])
+
+	nodes[0].wakeup()
+	# printGraph(nodes)
+	# execSequential(nodes)
+	execParallel(nodes)
+	printMST(nodes)

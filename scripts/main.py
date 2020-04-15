@@ -56,7 +56,6 @@ def execSequential(nodes):
 		
 	print ('Done')
 
-
 nodes, edges1, edges2 = readInput()
 # for node in nodes:
 # 	node.wakeup()
